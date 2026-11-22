@@ -5,13 +5,17 @@ const token = location.hash.slice(1);
 const storeKey = (k) => `ss:${token.slice(0, 8)}:${k}`;
 
 const $ = (id) => document.getElementById(id);
+const $$ = (sel) => document.querySelectorAll(sel);
 
 const state = {
   me: null,
-  side: "giving", // which chat is selected
+  side: "giving", // selected chat
   messages: { giving: [], receiving: [] },
   lastId: { giving: 0, receiving: 0 },
+  theirItems: [],
 };
+
+// ---------- Helpers ----------
 
 async function api(path, { body, ...options } = {}) {
   const res = await fetch(path, {
@@ -27,15 +31,52 @@ async function api(path, { body, ...options } = {}) {
   return data;
 }
 
-// Small DOM helper: el("li", { className: "x" }, child1, "text")
+// el("li", { className: "x" }, child, "text")
 function el(tag, props = {}, ...children) {
   const node = Object.assign(document.createElement(tag), props);
-  node.append(...children);
+  node.append(...children.filter((c) => c != null));
   return node;
 }
 
+function icon(name, extraClass = "") {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", `icon ${extraClass}`.trim());
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttribute("href", `#i-${name}`);
+  svg.append(use);
+  return svg;
+}
+
+const initials = (name) => name.trim().slice(0, 1).toUpperCase();
+
+let toastTimer;
+function toast(message, kind = "ok") {
+  const t = $("toast");
+  t.textContent = message;
+  t.className = `toast toast-${kind}`;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (t.hidden = true), 3200);
+}
+
+// Promise-based replacement for confirm(), styled like the app.
+function confirmDialog({ title, text, ok, danger = false, iconName = "check" }) {
+  const dlg = $("confirm-dialog");
+  $("confirm-title").textContent = title;
+  $("confirm-text").textContent = text;
+  $("confirm-ok").textContent = ok;
+  $("confirm-ok").className = `btn btn-block ${danger ? "btn-danger" : "btn-primary"}`;
+  $("confirm-icon").className = `dialog-icon ${danger ? "danger" : ""}`;
+  $("confirm-icon").replaceChildren(icon(iconName));
+  dlg.returnValue = "";
+  dlg.showModal();
+  return new Promise((resolve) => dlg.addEventListener("close", () => resolve(dlg.returnValue === "ok"), { once: true }));
+}
+
+// ---------- Boot ----------
+
 async function init() {
-  if (!token) {
+  if (!/^[0-9a-f]{32}$/.test(token)) {
     $("status").textContent = "Abra esta página pelo link que você recebeu no WhatsApp.";
     return;
   }
@@ -49,31 +90,62 @@ async function init() {
     return;
   }
 
+  const me = state.me;
   $("status").hidden = true;
   $("app").hidden = false;
-  $("hello").hidden = false;
-  $("my-name").textContent = state.me.name;
+  $("bottom-nav").hidden = false;
+  $("my-name").textContent = me.name;
+  $("avatar").textContent = initials(me.name);
+  $("avatar").hidden = false;
+  $("draw-chip").hidden = false;
+  $("draw-chip").classList.toggle("done", me.drawn);
+  $("draw-chip").querySelector("span").textContent = me.drawn ? "Sorteio realizado" : "Aguardando sorteio";
+  $("greeting-text").textContent = me.drawn
+    ? "O sorteio já aconteceu e o seu amigo secreto está guardado aqui dentro."
+    : "Ainda falta o sorteio. Assim que acontecer, você descobre aqui quem tirou.";
 
-  setupTabs();
-  setupFriend();
-  setupMyList();
+  if (me.drawn) {
+    $$(".receiver-first").forEach((n) => (n.textContent = me.receiver));
+  }
+
+  setupNav();
+  setupReveal();
+  setupWishes();
   setupChats();
-  if (state.me.isAdmin) setupAdmin();
+  if (me.isAdmin) setupAdmin();
+
+  // Restore the tab from the URL (?tab=chats), so refresh keeps you where you were.
+  const tab = new URLSearchParams(location.search).get("tab");
+  const valid = ["reveal", "wishes", "chats", ...(me.isAdmin ? ["admin"] : [])];
+  showTab(valid.includes(tab) ? `tab-${tab}` : "tab-reveal", { replace: true });
 }
 
-// ---------- Tabs ----------
+// ---------- Navigation ----------
 
-function setupTabs() {
-  document.querySelectorAll("#tabs button").forEach((btn) =>
-    btn.addEventListener("click", () => showTab(btn.dataset.tab))
-  );
+function setupNav() {
+  $$("#bottom-nav button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+  // Shortcut buttons inside cards: data-goto="tab-x" (+ optional data-wish-view / data-chat-side)
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-goto]");
+    if (!btn) return;
+    if (btn.dataset.wishView) showWishView(btn.dataset.wishView);
+    if (btn.dataset.chatSide && state.me.drawn) selectSide(btn.dataset.chatSide);
+    showTab(btn.dataset.goto);
+  });
 }
 
-function showTab(id) {
-  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === id));
-  document.querySelectorAll(".tab").forEach((t) => (t.hidden = t.id !== id));
+function showTab(id, { replace = false } = {}) {
+  $$("#bottom-nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === id));
+  $$(".tab").forEach((t) => (t.hidden = t.id !== id));
+  window.scrollTo({ top: 0 });
 
-  if (id === "tab-friend" && isRevealed()) loadTheirList();
+  // Keep the token in the hash; only the tab goes in the query string.
+  const url = `${location.pathname}?tab=${id.replace("tab-", "")}${location.hash}`;
+  history[replace ? "replaceState" : "pushState"]({ tab: id }, "", url);
+
+  if (id === "tab-reveal" && isRevealed()) loadTheirList();
+  if (id === "tab-wishes" && isRevealed()) loadTheirList();
   if (id === "tab-chats") {
     scrollChatToBottom();
     markSeen();
@@ -81,55 +153,79 @@ function showTab(id) {
   if (id === "tab-admin") loadAdmin();
 }
 
-// ---------- Amigo (reveal + their list) ----------
+window.addEventListener("popstate", (e) => {
+  if (e.state?.tab && state.me) showTab(e.state.tab, { replace: true });
+});
+
+// ---------- Revelação ----------
 
 // Remember the reveal per receiver, so a redraw asks to reveal again.
 function isRevealed() {
   return state.me.drawn && localStorage.getItem(storeKey("revealed")) === state.me.receiver;
 }
 
-function setupFriend() {
-  if (!state.me.drawn) {
-    $("not-drawn").hidden = false;
+function setupReveal() {
+  const me = state.me;
+  if (!me.drawn) {
+    $("reveal-waiting").hidden = false;
     return;
   }
-  $("drawn").hidden = false;
-  $("receiver").textContent = state.me.receiver;
-  document.querySelectorAll(".receiver-name").forEach((n) => (n.textContent = state.me.receiver));
+  $("receiver-name").textContent = me.receiver;
+  $("receiver-initial").textContent = initials(me.receiver);
 
-  $("reveal-btn").addEventListener("click", () => {
-    localStorage.setItem(storeKey("revealed"), state.me.receiver);
+  const open = () => {
+    if ($("gift-btn").classList.contains("opening")) return;
+    $("gift-btn").classList.add("opening");
+    setTimeout(() => {
+      localStorage.setItem(storeKey("revealed"), me.receiver);
+      applyReveal({ celebrate: true });
+      $("gift-btn").classList.remove("opening");
+    }, 650);
+  };
+  $("gift-btn").addEventListener("click", open);
+  $("reveal-btn").addEventListener("click", open);
+  $("cover-btn").addEventListener("click", () => {
+    localStorage.removeItem(storeKey("revealed"));
     applyReveal();
   });
+
   applyReveal();
 }
 
-function applyReveal() {
+function applyReveal({ celebrate = false } = {}) {
   const revealed = isRevealed();
-  $("reveal-btn").hidden = revealed;
-  $("receiver").hidden = !revealed;
-  $("their-list-card").hidden = !revealed;
-  document.querySelectorAll(".giving-label").forEach(
-    (n) => (n.textContent = revealed ? state.me.receiver : "Quem eu tirei")
-  );
-  updateChatHint();
+  $("reveal-wrapped").hidden = revealed;
+  $("reveal-open").hidden = !revealed;
+  $("their-preview").hidden = !revealed;
+  $("theirs-view-btn").hidden = !revealed;
+  if (!revealed) showWishView("mine");
+  updateChatLabels();
   if (revealed) loadTheirList();
+  if (celebrate) confetti();
 }
 
-async function loadTheirList() {
-  try {
-    const { items } = await api("/api/receiver/wishlist");
-    $("their-list").replaceChildren(...items.map((item) => wishItem(item)));
-    $("their-list-empty").hidden = items.length > 0;
-  } catch (err) {
-    $("their-list-empty").hidden = false;
-    $("their-list-empty").textContent = `Erro ao carregar: ${err.message}`;
+function confetti() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const box = $("confetti");
+  box.replaceChildren();
+  const colors = ["#c5221f", "#fda611", "#255647", "#ffb4aa", "#ffddb6"];
+  for (let i = 0; i < 40; i++) {
+    const piece = el("i");
+    piece.style.left = `${Math.random() * 100}%`;
+    piece.style.background = colors[i % colors.length];
+    piece.style.setProperty("--dx", `${(Math.random() - 0.5) * 160}px`);
+    piece.style.setProperty("--rot", `${Math.random() * 720 - 360}deg`);
+    piece.style.animationDelay = `${Math.random() * 0.25}s`;
+    box.append(piece);
   }
+  setTimeout(() => box.replaceChildren(), 2200);
 }
 
-// ---------- Minha lista ----------
+// ---------- Desejos ----------
 
-function setupMyList() {
+function setupWishes() {
+  $$("#wish-views button").forEach((b) => b.addEventListener("click", () => showWishView(b.dataset.view)));
+
   const form = $("wish-form");
   form.querySelectorAll("input[name=kind]").forEach((r) => r.addEventListener("change", updateWishForm));
   updateWishForm();
@@ -137,20 +233,27 @@ function setupMyList() {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const kind = form.elements.kind.value;
+    const text = $("wish-text").value.trim();
+    if (!text) {
+      $("wish-text").focus();
+      $("wish-text").classList.add("shake");
+      setTimeout(() => $("wish-text").classList.remove("shake"), 500);
+      return;
+    }
     const submit = form.querySelector("button[type=submit]");
     submit.disabled = true;
     try {
       const { item } = await api("/api/wishlist", {
         method: "POST",
-        body: { kind, text: $("wish-text").value, url: kind === "item" ? $("wish-url").value : "" },
+        body: { kind, text, url: kind === "item" ? $("wish-url").value : "" },
       });
-      $("my-list").append(wishItem(item, { deletable: true }));
+      $("my-list").append(wishCard(item, { deletable: true }));
       form.reset();
       updateWishForm();
-      updateMyListEmpty();
-      $("wish-text").focus();
+      updateMyCount();
+      toast("Desejo adicionado! 🎁");
     } catch (err) {
-      alert(err.message);
+      toast(err.message, "error");
     } finally {
       submit.disabled = false;
     }
@@ -159,59 +262,87 @@ function setupMyList() {
   loadMyList();
 }
 
+function showWishView(view) {
+  if (view === "theirs" && !isRevealed()) view = "mine";
+  $$("#wish-views button").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+  $("wishes-mine").hidden = view !== "mine";
+  $("wishes-theirs").hidden = view !== "theirs";
+}
+
 function updateWishForm() {
   const isItem = $("wish-form").elements.kind.value === "item";
-  $("wish-url").hidden = !isItem;
+  $("wish-url-field").hidden = !isItem;
   $("wish-text").placeholder = isItem
     ? "Ex.: Fone de ouvido Bluetooth preto"
-    : "Ex.: Algo para a cozinha, gosto de cafés especiais";
+    : "Ex.: Algo para a cozinha, adoro café";
 }
 
 async function loadMyList() {
   try {
     const { items } = await api("/api/wishlist");
-    $("my-list").replaceChildren(...items.map((item) => wishItem(item, { deletable: true })));
+    $("my-list").replaceChildren(...items.map((item) => wishCard(item, { deletable: true })));
   } catch (err) {
-    alert(`Erro ao carregar sua lista: ${err.message}`);
+    toast(`Erro ao carregar sua lista: ${err.message}`, "error");
   }
-  updateMyListEmpty();
+  updateMyCount();
 }
 
-function updateMyListEmpty() {
-  $("my-list-empty").hidden = $("my-list").children.length > 0;
+function updateMyCount() {
+  const n = $("my-list").children.length;
+  $("my-count").textContent = n;
+  $("my-list-empty").hidden = n > 0;
 }
 
-function wishItem(item, { deletable = false } = {}) {
-  const body = el("div", { className: "wish-body" }, el("span", { textContent: item.text }));
-  if (item.url) {
-    body.append(
-      el("a", {
-        href: item.url,
-        target: "_blank",
-        rel: "noopener noreferrer",
-        className: "wish-link",
-        textContent: `${new URL(item.url).hostname.replace(/^www\./, "")} ↗`,
-      })
-    );
+async function loadTheirList() {
+  try {
+    const { items } = await api("/api/receiver/wishlist");
+    state.theirItems = items;
+    $("their-list").replaceChildren(...items.map((item) => wishCard(item)));
+    $("their-list-empty").hidden = items.length > 0;
+    $("their-preview-list").replaceChildren(...items.slice(0, 3).map((item) => wishCard(item, { compact: true })));
+    $("their-preview-empty").hidden = items.length > 0;
+    $("their-count").textContent = items.length === 1 ? "1 desejo" : `${items.length} desejos`;
+  } catch (err) {
+    toast(`Erro ao carregar a lista: ${err.message}`, "error");
   }
+}
 
-  const li = el(
-    "li",
-    { className: "wish" },
-    el("span", { className: `kind kind-${item.kind}`, textContent: item.kind === "idea" ? "Ideia" : "Item" }),
-    body
+function wishCard(item, { deletable = false, compact = false } = {}) {
+  const isIdea = item.kind === "idea";
+  const body = el(
+    "div",
+    { className: "wish-body" },
+    compact ? null : el("span", { className: `pill ${isIdea ? "pill-green" : "pill-gold"}`, textContent: isIdea ? "Ideia de presente" : "Item específico" }),
+    el("span", { className: "wish-text", textContent: item.text })
   );
+  if (item.url && !compact) {
+    const link = el("a", { href: item.url, target: "_blank", rel: "noopener noreferrer", className: "wish-link" });
+    link.append(`Ver em ${new URL(item.url).hostname.replace(/^www\./, "")}`, icon("external"));
+    body.append(link);
+  }
+
+  const li = el("li", { className: `wish ${compact ? "compact" : "card"}` }, el("span", { className: `wish-icon ${isIdea ? "green" : "gold"}` }, icon(isIdea ? "bulb" : "bag")), body);
 
   if (deletable) {
-    const remove = el("button", { type: "button", className: "icon-btn", textContent: "✕", title: "Remover" });
+    const remove = el("button", { type: "button", className: "icon-btn", ariaLabel: `Remover ${item.text}` }, icon("trash"));
     remove.addEventListener("click", async () => {
-      if (!confirm(`Remover "${item.text}"?`)) return;
+      const ok = await confirmDialog({
+        title: "Remover este desejo?",
+        text: `"${item.text}" vai sair da sua lista.`,
+        ok: "Sim, remover",
+        danger: true,
+        iconName: "trash",
+      });
+      if (!ok) return;
       try {
         await api(`/api/wishlist/${item.id}`, { method: "DELETE" });
-        li.remove();
-        updateMyListEmpty();
+        li.classList.add("leaving");
+        setTimeout(() => {
+          li.remove();
+          updateMyCount();
+        }, 200);
       } catch (err) {
-        alert(err.message);
+        toast(err.message, "error");
       }
     });
     li.append(remove);
@@ -219,22 +350,20 @@ function wishItem(item, { deletable = false } = {}) {
   return li;
 }
 
-// ---------- Chats ----------
-// Polls every 5 s while the page is visible. The dot on the tab shows unread messages.
+// ---------- Conversas ----------
+// Polls every 5 s while the page is visible. Dots show unread messages.
 
 const POLL_MS = 5000;
 let polling = false;
 
 function setupChats() {
   if (!state.me.drawn) {
-    $("chats-not-drawn").hidden = false;
+    $("chats-waiting").hidden = false;
     return;
   }
   $("chats").hidden = false;
 
-  document.querySelectorAll("#chat-sides button").forEach((b) =>
-    b.addEventListener("click", () => selectSide(b.dataset.side))
-  );
+  $$(".chat-picker").forEach((b) => b.addEventListener("click", () => selectSide(b.dataset.side)));
   $("chat-form").addEventListener("submit", sendMessage);
   selectSide("giving");
 
@@ -245,19 +374,35 @@ function setupChats() {
   });
 }
 
-function selectSide(side) {
-  state.side = side;
-  document.querySelectorAll("#chat-sides button").forEach((b) => b.classList.toggle("active", b.dataset.side === side));
-  updateChatHint();
-  renderMessages();
-  markSeen();
+function updateChatLabels() {
+  if (!state.me.drawn) return;
+  const revealed = isRevealed();
+  const name = state.me.receiver;
+  document.querySelector(".giving-title").textContent = revealed ? name : "Quem eu tirei";
+  document.querySelector(".giving-sub").textContent = revealed ? "Não sabe que é você 🤫" : "Abra o presente para ver o nome";
+  $("giving-avatar").replaceChildren(revealed ? initials(name) : icon("gift"));
+  updateChatHead();
 }
 
-function updateChatHint() {
-  if (!state.me?.drawn) return;
-  $("chat-hint").textContent = state.side === "giving"
-    ? `Converse com ${isRevealed() ? state.me.receiver : "quem você tirou"} sem revelar quem você é.`
-    : "Quem tirou você está do outro lado. Você não sabe quem é!";
+function updateChatHead() {
+  if (!state.me.drawn) return;
+  const giving = state.side === "giving";
+  const revealed = isRevealed();
+  $("chat-head-avatar").className = `picker-avatar ${giving ? "red" : "gold"}`;
+  $("chat-head-avatar").replaceChildren(giving ? (revealed ? initials(state.me.receiver) : icon("gift")) : icon("mask"));
+  $("chat-head-title").textContent = giving ? (revealed ? state.me.receiver : "Quem eu tirei") : "Seu amigo secreto";
+  $("chat-head-sub").textContent = giving
+    ? "Vê você só como “Amigo secreto” 🎅"
+    : "Você não sabe quem é. Ainda!";
+  $("chat-input").placeholder = giving ? "Mensagem anônima…" : "Responder ao seu amigo secreto…";
+}
+
+function selectSide(side) {
+  state.side = side;
+  $$(".chat-picker").forEach((b) => b.classList.toggle("active", b.dataset.side === side));
+  updateChatHead();
+  renderMessages();
+  markSeen();
 }
 
 async function poll() {
@@ -281,27 +426,41 @@ function addMessages(side, msgs) {
   if (!fresh.length) return;
   state.messages[side].push(...fresh);
   state.lastId[side] = fresh[fresh.length - 1].id;
+  updatePreview(side);
   if (side === state.side) appendMessages(fresh);
+}
+
+function updatePreview(side) {
+  const last = state.messages[side].at(-1);
+  const node = document.querySelector(`[data-preview="${side}"]`);
+  node.textContent = last ? `${last.mine ? "Você: " : ""}${last.body}` : "";
 }
 
 function renderMessages() {
   $("messages").replaceChildren();
   const msgs = state.messages[state.side];
   if (msgs.length) appendMessages(msgs);
-  else $("messages").append(el("li", { className: "empty", textContent: "Nenhuma mensagem ainda." }));
+  else
+    $("messages").append(
+      el("li", { className: "empty" }, icon("sparkles"), el("span", {
+        textContent: state.side === "giving"
+          ? "Puxe assunto! Pergunte tamanho, cor preferida…"
+          : "Quando seu amigo secreto escrever, aparece aqui.",
+      }))
+    );
   scrollChatToBottom();
 }
 
 function appendMessages(msgs) {
   const list = $("messages");
   list.querySelector(".empty")?.remove();
-  const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
+  const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
   list.append(
     ...msgs.map((m) =>
       el(
         "li",
-        { className: m.mine ? "msg mine" : "msg theirs" },
-        el("span", { textContent: m.body }),
+        { className: m.mine ? "msg mine" : `msg theirs ${state.side}` },
+        el("span", { className: "msg-body", textContent: m.body }),
         el("time", { textContent: formatTime(m.at) })
       )
     )
@@ -327,7 +486,7 @@ async function sendMessage(e) {
     addMessages(side, [message]);
     markSeen();
   } catch (err) {
-    alert(err.message);
+    toast(err.message, "error");
   } finally {
     input.disabled = false;
     input.focus();
@@ -343,49 +502,67 @@ function markSeen() {
   updateDots();
 }
 
-function hasUnread(side) {
+function unreadCount(side) {
   const seen = Number(localStorage.getItem(seenKey(side)) || 0);
-  return state.messages[side].some((m) => !m.mine && m.id > seen);
+  return state.messages[side].filter((m) => !m.mine && m.id > seen).length;
 }
 
 function updateDots() {
-  const unread = { giving: hasUnread("giving"), receiving: hasUnread("receiving") };
-  document.querySelectorAll("#chat-sides button").forEach((b) => (b.querySelector(".dot").hidden = !unread[b.dataset.side]));
-  $("chats-dot").hidden = !(unread.giving || unread.receiving);
+  let total = 0;
+  $$(".chat-picker").forEach((b) => {
+    const n = unreadCount(b.dataset.side);
+    total += n;
+    const badge = b.querySelector(".badge");
+    badge.hidden = n === 0;
+    badge.textContent = n > 9 ? "9+" : n;
+  });
+  $("chats-dot").hidden = total === 0;
 }
 
 function formatTime(sqliteUtc) {
   // D1 stores "YYYY-MM-DD HH:MM:SS" in UTC.
-  return new Date(sqliteUtc.replace(" ", "T") + "Z").toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const d = new Date(sqliteUtc.replace(" ", "T") + "Z");
+  const today = new Date().toDateString() === d.toDateString();
+  const time = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return today ? time : `${d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}, ${time}`;
 }
 
 // ---------- Admin ----------
 
 function setupAdmin() {
+  // Lets /admin skip the key prompt next time on this browser.
+  localStorage.setItem("ss:adminToken", token);
   $("admin-tab-btn").hidden = false;
+
   $("draw-btn").addEventListener("click", async () => {
-    if (!confirm("Fazer o sorteio agora?")) return;
-    await adminAction("/api/admin/draw");
+    const ok = await confirmDialog({
+      title: "Fazer o sorteio agora?",
+      text: "Cada pessoa vai tirar alguém. Ninguém, nem você, vê os pares.",
+      ok: "Sim, sortear",
+      iconName: "shuffle",
+    });
+    if (ok) adminAction("/api/admin/draw");
   });
   $("reset-btn").addEventListener("click", async () => {
-    if (!confirm("Reiniciar o sorteio? Todas as conversas serão apagadas. As listas de desejos continuam.")) return;
-    await adminAction("/api/admin/reset");
+    const ok = await confirmDialog({
+      title: "Reiniciar o sorteio?",
+      text: "Todas as conversas serão apagadas e os pares desfeitos. As listas de desejos continuam salvas.",
+      ok: "Reiniciar sorteio",
+      danger: true,
+      iconName: "reset",
+    });
+    if (ok) adminAction("/api/admin/reset");
   });
 }
 
 async function adminAction(path) {
   try {
     await api(path, { method: "POST" });
+    // The admin is also a participant, so every view changes.
+    location.reload();
   } catch (err) {
-    alert(err.message);
+    toast(err.message, "error");
   }
-  // The admin is also a participant, so their own views change too.
-  location.reload();
 }
 
 async function loadAdmin() {
@@ -393,40 +570,69 @@ async function loadAdmin() {
   try {
     data = await api("/api/admin/members");
   } catch (err) {
-    $("draw-status").textContent = `Erro: ${err.message}`;
+    toast(`Erro: ${err.message}`, "error");
     return;
   }
 
+  const total = data.members.length;
   const opened = data.members.filter((m) => m.opened).length;
   const filled = data.members.filter((m) => m.hasWishlist).length;
-  $("draw-status").textContent =
-    `${data.drawn ? "✅ Sorteio feito." : "Sorteio ainda não feito."} ` +
-    `${opened}/${data.members.length} abriram · ${filled}/${data.members.length} com lista`;
+
+  $("admin-state").className = `pill ${data.drawn ? "pill-green" : "pill-gold"}`;
+  $("admin-state").replaceChildren(icon(data.drawn ? "check" : "clock"), data.drawn ? "Sorteio realizado" : "Aguardando sorteio");
+  $("stat-total").textContent = total;
+  $("stat-opened").textContent = opened;
+  $("stat-filled").textContent = filled;
+  $("progress-label").textContent = `${filled} de ${total}`;
+  $("progress-bar").style.width = `${Math.round((filled / total) * 100)}%`;
   $("draw-btn").hidden = data.drawn;
   $("reset-btn").hidden = !data.drawn;
 
-  $("member-list").replaceChildren(...data.members.map(memberRow));
+  $("member-list").replaceChildren(...data.members.map(memberCard));
 }
 
-function memberRow(m) {
+function memberCard(m) {
   const link = `${location.origin}/#${m.token}`;
-  const copy = el("button", { type: "button", className: "small", textContent: "Copiar link" });
+  const isMe = m.name === state.me.name;
+
+  const zap = el("a", {
+    className: "btn btn-zap btn-sm",
+    href: `https://wa.me/?text=${encodeURIComponent(`Oi, ${m.name}! 🎄 Este é o seu link do nosso Amigo Secreto. É pessoal, não compartilhe: ${link}`)}`,
+    target: "_blank",
+    rel: "noopener noreferrer",
+  });
+  zap.append(icon("send"), "Zap");
+
+  const copy = el("button", { type: "button", className: "btn btn-ghost btn-sm", ariaLabel: `Copiar link de ${m.name}` }, icon("copy"));
   copy.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(link);
-      copy.textContent = "Copiado!";
-      setTimeout(() => (copy.textContent = "Copiar link"), 1500);
+      toast(`Link de ${m.name} copiado`);
     } catch {
       prompt("Copie o link:", link);
     }
   });
 
+  const status = (ok, yes, no, iconName) =>
+    el("span", { className: `pill ${ok ? "pill-green" : "pill-muted"}` }, icon(ok ? iconName : "clock"), ok ? yes : no);
+
   return el(
     "li",
-    {},
-    el("span", { className: "member-name", textContent: m.name + (m.isKid ? " 🧒" : "") }),
-    el("span", { className: "flags", textContent: `${m.opened ? "👀" : "·"} ${m.hasWishlist ? "🎁" : "·"}` }),
-    copy
+    { className: "card member" },
+    el("span", { className: "member-avatar", textContent: initials(m.name) }),
+    el(
+      "div",
+      { className: "member-info" },
+      el(
+        "div",
+        { className: "member-name" },
+        el("strong", { textContent: m.name }),
+        m.isKid ? el("span", { className: "pill pill-gold", textContent: "Criança" }) : null,
+        isMe ? el("span", { className: "pill pill-red", textContent: "Você" }) : null
+      ),
+      el("div", { className: "member-status" }, status(m.opened, "Abriu", "Não abriu", "check"), status(m.hasWishlist, "Tem lista", "Sem lista", "heart"))
+    ),
+    el("div", { className: "member-actions" }, zap, copy)
   );
 }
 

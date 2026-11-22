@@ -6,6 +6,7 @@ export default {
     try {
       if (route === "GET /api/health") return health(env);
       if (!url.pathname.startsWith("/api/")) return new Response("Not found", { status: 404 });
+      if (route === "POST /api/admin-login") return adminLogin(request, env);
 
       // Everything below needs a valid member link.
       const me = await authenticate(request, env);
@@ -216,6 +217,28 @@ function toClientMessage(m, myRole) {
 }
 
 // ---------- Admin ----------
+
+// Fallback login for the admin: trade the ADMIN_KEY secret for the admin's own link token.
+async function adminLogin(request, env) {
+  if (!env.ADMIN_KEY) return json({ error: "ADMIN_KEY não configurada no servidor." }, 503);
+  const { key } = await readJson(request);
+  if (typeof key !== "string" || !(await safeEqual(key, env.ADMIN_KEY))) {
+    await new Promise((r) => setTimeout(r, 1000)); // slow down guessing
+    return json({ error: "Chave incorreta." }, 401);
+  }
+  const token = await env.DB.prepare("SELECT token FROM members WHERE is_admin = 1").first("token");
+  return json({ token });
+}
+
+// Compare SHA-256 digests in constant time, so response timing leaks nothing about the key.
+async function safeEqual(a, b) {
+  const enc = new TextEncoder();
+  const [da, db] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(a)),
+    crypto.subtle.digest("SHA-256", enc.encode(b)),
+  ]);
+  return crypto.subtle.timingSafeEqual(da, db);
+}
 
 // Status per person, never who got whom and never wishlist contents.
 async function adminMembers(env) {
