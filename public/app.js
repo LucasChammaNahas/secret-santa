@@ -242,7 +242,7 @@ function confetti() {
   setTimeout(() => box.replaceChildren(), 2200);
 }
 
-// ---------- Desejos ----------
+// ---------- Lista de presentes ----------
 
 function setupWishes() {
   $$("#wish-views button").forEach((b) => b.addEventListener("click", () => showWishView(b.dataset.view)));
@@ -272,7 +272,7 @@ function setupWishes() {
       form.reset();
       updateWishForm();
       updateMyCount();
-      toast("Desejo adicionado! 🎁");
+      toast("Presente adicionado! 🎁");
     } catch (err) {
       toast(err.message, "error");
     } finally {
@@ -322,7 +322,7 @@ async function loadTheirList() {
     $("their-list-empty").hidden = items.length > 0;
     $("their-preview-list").replaceChildren(...items.slice(0, 3).map((item) => wishCard(item, { compact: true })));
     $("their-preview-empty").hidden = items.length > 0;
-    $("their-count").textContent = items.length === 1 ? "1 desejo" : `${items.length} desejos`;
+    $("their-count").textContent = items.length === 1 ? "1 presente" : `${items.length} presentes`;
   } catch (err) {
     toast(`Erro ao carregar a lista: ${err.message}`, "error");
   }
@@ -348,7 +348,7 @@ function wishCard(item, { deletable = false, compact = false } = {}) {
     const remove = el("button", { type: "button", className: "icon-btn", ariaLabel: `Remover ${item.text}` }, icon("trash"));
     remove.addEventListener("click", async () => {
       const ok = await confirmDialog({
-        title: "Remover este desejo?",
+        title: "Remover este presente?",
         text: `"${item.text}" vai sair da sua lista.`,
         ok: "Sim, remover",
         danger: true,
@@ -568,7 +568,7 @@ function setupAdmin() {
   $("reset-btn").addEventListener("click", async () => {
     const ok = await confirmDialog({
       title: "Reiniciar o sorteio?",
-      text: "Todas as conversas serão apagadas e os pares desfeitos. As listas de desejos continuam salvas.",
+      text: "Todas as conversas serão apagadas e os pares desfeitos. As listas de presentes continuam salvas.",
       ok: "Reiniciar sorteio",
       danger: true,
       iconName: "reset",
