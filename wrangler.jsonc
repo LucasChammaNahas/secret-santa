@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "secret-santa",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-21",
+
+  // Frontend: files in public/ are served as static assets.
+  // Requests that don't match a file fall through to src/index.js.
+  "assets": {
+    "directory": "./public"
+  },
+
+  // Backend database. Code accesses it as env.DB.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "santa",
+      "database_id": "5f31de06-68fa-409f-b04c-7d4fd520fd7a",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
