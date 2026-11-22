@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#fdf9f3">
   <title>Amigo Secreto</title>
@@ -45,7 +45,7 @@
       <span class="brand-title">Amigo Secreto</span>
       <span id="draw-chip" class="status-chip" hidden><i></i><span></span></span>
     </div>
-    <div id="avatar" class="avatar" hidden></div>
+    <div id="whoami" class="whoami" hidden></div>
   </header>
 
   <main>
@@ -65,8 +65,7 @@
           <div class="ribbon-strip"></div>
           <div class="gift-box gift-box--sleeping" aria-hidden="true"><div class="gift-lid"></div><div class="gift-body"></div><div class="gift-bow"></div></div>
           <h2>O sorteio ainda não foi feito</h2>
-          <p class="muted">Enquanto isso, monte sua lista de presentes para ajudar quem tirar você.</p>
-          <button type="button" class="btn btn-secondary" data-goto="tab-wishes"><svg class="icon"><use href="#i-heart"/></svg> Montar minha lista</button>
+          <p class="muted">A lista de presentes e as conversas abrem depois que você descobrir quem tirou.</p>
         </div>
 
         <!-- Drawn, still wrapped -->
@@ -78,7 +77,7 @@
           </button>
           <h2>Quem será que você tirou?</h2>
           <p class="muted">Toque no presente para abrir.</p>
-          <button type="button" id="reveal-btn" class="btn btn-primary btn-block"><svg class="icon"><use href="#i-gift"/></svg> Abrir presente</button>
+          <button type="button" id="reveal-btn" class="btn btn-primary btn-block"><svg class="icon"><use href="#i-gift"/></svg> Ver quem você tirou</button>
         </div>
 
         <!-- Opened: both cards sit in the same grid cell, so the box keeps one height when toggling -->
@@ -195,14 +194,6 @@
           <div class="segmented" id="chat-sides">
             <button type="button" data-side="giving" class="active"><svg class="icon"><use href="#i-gift"/></svg> <span>Quem eu tirei</span><i class="badge" hidden></i></button>
             <button type="button" data-side="receiving"><svg class="icon"><use href="#i-mask"/></svg> <span>Quem me tirou</span><i class="badge" hidden></i></button>
-          </div>
-
-          <div class="chat-who">
-            <span class="picker-avatar" id="chat-head-avatar"></span>
-            <div>
-              <strong id="chat-head-title"></strong>
-              <small id="chat-head-sub"></small>
-            </div>
           </div>
 
           <div class="card chat">

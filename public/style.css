@@ -107,13 +107,8 @@ a { color: inherit; }
 .status-chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--gold-2); }
 .status-chip.done { color: var(--green); }
 .status-chip.done i { background: var(--green); animation: pulse 2s infinite; }
-.avatar {
-  width: 40px; height: 40px; border-radius: 50%;
-  display: grid; place-items: center;
-  background: var(--primary); color: #fff;
-  font-family: var(--display); font-weight: 800;
-  box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--primary-soft);
-}
+/* Whose link this is, in plain text: shared phones need it obvious. */
+.whoami { font-weight: 700; font-size: 0.95rem; color: var(--text); white-space: nowrap; }
 
 main {
   max-width: 560px;
@@ -167,6 +162,7 @@ main {
 .bottom-nav .icon { width: 24px; height: 24px; transition: transform 0.2s; }
 .bottom-nav button.active { color: var(--primary); font-weight: 800; }
 .bottom-nav button.active .icon { transform: translateY(-1px) scale(1.08); }
+.bottom-nav button.locked { opacity: 0.4; }
 .bottom-nav button.active::before {
   content: ""; position: absolute; top: -8px; left: 30%; right: 30%; height: 3px;
   border-radius: 0 0 3px 3px; background: var(--primary);
@@ -400,13 +396,6 @@ input:focus { outline: none; border-color: var(--primary-2); background: #fff; }
 .wish.compact .wish-text { font-size: 0.95rem; }
 
 /* ============ Chats ============ */
-.picker-avatar {
-  width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
-  display: grid; place-items: center;
-  font-family: var(--display); font-weight: 800; font-size: 1.15rem;
-}
-.picker-avatar.red { background: var(--primary); color: #fff; }
-.picker-avatar.gold { background: var(--gold-2); color: #4a2e00; }
 .badge {
   flex-shrink: 0; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
   display: grid; place-items: center;
@@ -416,14 +405,26 @@ input:focus { outline: none; border-color: var(--primary-2); background: #fff; }
 }
 
 .chat { padding: 0; overflow: hidden; }
-/* Who you're talking to: plain text on the page, no card. */
-.chat-who { display: flex; align-items: center; gap: 12px; padding: 4px 4px 0; }
-.chat-who div { display: flex; flex-direction: column; min-width: 0; }
-.chat-who strong { font-family: var(--display); font-size: 1.15rem; }
-.chat-who small { color: var(--text-2); font-size: 0.85rem; }
+/* Full-screen chat: on the Conversas tab the page never scrolls. Everything is a flex column
+   that fills the screen between the top bar and the tab bar; only .messages scrolls.
+   --app-h is the visible height while the phone keyboard is open (set in app.js). */
+body.chat-mode { height: var(--app-h, 100dvh); overflow: hidden; display: flex; flex-direction: column; }
+body.chat-mode main {
+  flex: 1; min-height: 0; width: 100%;
+  display: flex; flex-direction: column;
+  padding-bottom: calc(var(--nav-h) + 12px + env(safe-area-inset-bottom));
+}
+body.chat-mode #app, body.chat-mode #tab-chats, body.chat-mode #chats { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+body.chat-mode .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* Keyboard open: the tab bar would sit on top of the input, and on small phones the top bar
+   leaves little room for messages. Both step aside; the toggle still says which chat. */
+body.kb-open .bottom-nav, body.kb-open .topbar { display: none; }
+body.kb-open main { padding-top: 8px; }
+body.kb-open main { padding-bottom: 8px; }
+
 .messages {
   list-style: none; margin: 0; padding: 16px;
-  height: min(52vh, 440px); overflow-y: auto;
+  flex: 1; min-height: 0; overflow-y: auto;
   display: flex; flex-direction: column; gap: 8px;
   overscroll-behavior: contain;
 }

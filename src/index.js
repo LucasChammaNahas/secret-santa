@@ -73,7 +73,8 @@ async function getMe(env, me) {
   }
 
   const receiver = await env.DB.prepare(
-    "SELECT m.name FROM assignments a JOIN members m ON m.id = a.receiver_id WHERE a.giver_id = ?"
+    `SELECT m.name, (SELECT MAX(id) FROM draws) AS draw_id
+     FROM assignments a JOIN members m ON m.id = a.receiver_id WHERE a.giver_id = ?`
   )
     .bind(me.id)
     .first();
@@ -83,6 +84,7 @@ async function getMe(env, me) {
     isAdmin: Boolean(me.is_admin),
     drawn: Boolean(receiver),
     receiver: receiver ? receiver.name : null,
+    drawId: receiver ? receiver.draw_id : null, // changes on every draw, so phones forget old reveals
   });
 }
 
@@ -272,7 +274,10 @@ async function adminDraw(env) {
   const ids = shuffle(results.map((r) => r.id));
 
   const insert = env.DB.prepare("INSERT INTO assignments (giver_id, receiver_id) VALUES (?, ?)");
-  const statements = ids.map((giver, i) => insert.bind(giver, ids[(i + 1) % ids.length]));
+  const statements = [
+    env.DB.prepare("INSERT INTO draws DEFAULT VALUES"),
+    ...ids.map((giver, i) => insert.bind(giver, ids[(i + 1) % ids.length])),
+  ];
 
   try {
     await env.DB.batch(statements); // runs as one transaction

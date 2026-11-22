@@ -96,8 +96,8 @@ async function init() {
   $("app").hidden = false;
   $("bottom-nav").hidden = false;
   $("my-name").textContent = me.name;
-  $("avatar").textContent = initials(me.name);
-  $("avatar").hidden = false;
+  $("whoami").textContent = me.name;
+  $("whoami").hidden = false;
   $("draw-chip").hidden = false;
   $("draw-chip").classList.toggle("done", me.drawn);
   $("draw-chip").querySelector("span").textContent = me.drawn ? "Sorteio realizado" : "Aguardando sorteio";
@@ -132,8 +132,25 @@ function setupNav() {
   });
 }
 
+// Presentes and Conversas unlock only after the draw AND after the person saw who they drew.
+// isOpened() is false before the draw, and a reset + new draw makes it false again (new drawId).
+const isLocked = (id) => !isOpened() && (id === "tab-wishes" || id === "tab-chats");
+
+function updateLocks() {
+  $$("#bottom-nav button").forEach((b) => {
+    const locked = isLocked(b.dataset.tab);
+    b.classList.toggle("locked", locked);
+    b.setAttribute("aria-disabled", locked);
+  });
+}
+
 function showTab(id, { replace = false } = {}) {
+  if (isLocked(id)) {
+    if (!replace) toast(state.me.drawn ? "Primeiro veja quem você tirou 🎁" : "Abre depois do sorteio 🎁");
+    id = "tab-reveal";
+  }
   if (id !== "tab-reveal") hideName();
+  document.body.classList.toggle("chat-mode", id === "tab-chats");
   $$("#bottom-nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === id));
   $$(".tab").forEach((t) => (t.hidden = t.id !== id));
   window.scrollTo({ top: 0 });
@@ -157,14 +174,14 @@ window.addEventListener("popstate", (e) => {
 // ---------- Revelação ----------
 
 // Two states:
-// - opened: the gift was opened once (saved per receiver, so a redraw asks to open again).
+// - opened: the gift was opened once for this draw (saved per drawId, so a reset + redraw asks again).
 // - showing: the name is on screen right now. Phones are shared, so it covers itself
 //   after 1 min, when leaving this tab, or when the page is hidden. The name appears nowhere else.
 const SHOW_MS = 60 * 1000;
 let hideTimer;
 
 function isOpened() {
-  return state.me.drawn && localStorage.getItem(storeKey("revealed")) === state.me.receiver;
+  return state.me.drawn && localStorage.getItem(storeKey("revealed")) === String(state.me.drawId);
 }
 
 function showName({ celebrate = false } = {}) {
@@ -183,6 +200,7 @@ function hideName() {
 
 function setupReveal() {
   const me = state.me;
+  updateLocks();
   if (!me.drawn) {
     $("reveal-waiting").hidden = false;
     return;
@@ -193,7 +211,7 @@ function setupReveal() {
     if ($("gift-btn").classList.contains("opening")) return;
     $("gift-btn").classList.add("opening");
     setTimeout(() => {
-      localStorage.setItem(storeKey("revealed"), me.receiver);
+      localStorage.setItem(storeKey("revealed"), String(me.drawId));
       showName({ celebrate: true });
       $("gift-btn").classList.remove("opening");
     }, 650);
@@ -217,6 +235,7 @@ function applyReveal({ celebrate = false } = {}) {
   $("reveal-covered").classList.toggle("off", state.showing);
   $("their-preview").hidden = !opened;
   $("theirs-view-btn").hidden = !opened;
+  updateLocks();
   if (!opened) showWishView("mine");
   // showTab loads the list on later visits; only the first opening needs it here.
   if (celebrate) {
@@ -399,6 +418,7 @@ function setupChats() {
 
   $$("#chat-sides button").forEach((b) => b.addEventListener("click", () => selectSide(b.dataset.side)));
   $("chat-form").addEventListener("submit", sendMessage);
+  setupKeyboard();
   selectSide("giving");
 
   poll();
@@ -414,21 +434,10 @@ function setupChats() {
 }
 
 // The receiver's name never appears here; only the Seu Amigo tab shows it.
-function updateChatHead() {
-  const giving = state.side === "giving";
-  $("chat-head-avatar").className = `picker-avatar ${giving ? "red" : "gold"}`;
-  $("chat-head-avatar").replaceChildren(icon(giving ? "gift" : "mask"));
-  $("chat-head-title").textContent = giving ? "Conversando com quem você tirou" : "Conversando com quem tirou você";
-  $("chat-head-sub").textContent = giving
-    ? "Essa pessoa não sabe que é você. Para ela, você aparece como “Quem me tirou” 🎅"
-    : "Você não sabe quem é. Ainda!";
-  $("chat-input").placeholder = giving ? "Mensagem anônima para quem você tirou…" : "Responder a quem tirou você…";
-}
-
 function selectSide(side) {
   state.side = side;
   $$("#chat-sides button").forEach((b) => b.classList.toggle("active", b.dataset.side === side));
-  updateChatHead();
+  $("chat-input").placeholder = side === "giving" ? "Mensagem anônima para quem você tirou…" : "Responder a quem tirou você…";
   renderMessages();
   markSeen();
 }
@@ -495,24 +504,60 @@ function scrollChatToBottom() {
   list.scrollTop = list.scrollHeight;
 }
 
+// The input is never disabled: disabling it would blur it and close the phone keyboard on every send.
+let sending = false;
 async function sendMessage(e) {
   e.preventDefault();
   const input = $("chat-input");
   const text = input.value.trim();
-  if (!text) return;
+  if (!text || sending) return;
   const side = state.side;
-  input.disabled = true;
+  sending = true;
   try {
     const { message } = await api(`/api/chats/${side}`, { method: "POST", body: { body: text } });
-    input.value = "";
+    if (input.value.trim() === text) input.value = "";
     addMessages(side, [message]);
     markSeen();
   } catch (err) {
     toast(err.message, "error");
   } finally {
-    input.disabled = false;
-    input.focus();
+    sending = false;
   }
+}
+
+// ---------- Phone keyboard ----------
+// iOS doesn't shrink the page when the keyboard opens; it only shrinks the visual viewport.
+// So while typing on a touch screen, the chat is sized to the visible area and the tab bar hides.
+// Android shrinks the page itself (interactive-widget=resizes-content in the viewport meta).
+function setupKeyboard() {
+  const input = $("chat-input");
+  const vv = window.visualViewport;
+  const touch = matchMedia("(pointer: coarse)").matches;
+
+  const fit = () => {
+    const open = document.body.classList.contains("kb-open");
+    if (open && vv) document.documentElement.style.setProperty("--app-h", `${vv.height}px`);
+    else document.documentElement.style.removeProperty("--app-h");
+    if (document.body.classList.contains("chat-mode")) {
+      window.scrollTo(0, 0); // iOS scrolls the page to the input; undo it, the layout already fits
+      if (open) scrollChatToBottom();
+    }
+  };
+
+  input.addEventListener("focus", () => {
+    if (!touch) return;
+    document.body.classList.add("kb-open");
+    fit();
+  });
+  input.addEventListener("blur", () => {
+    document.body.classList.remove("kb-open");
+    fit();
+  });
+  vv?.addEventListener("resize", fit);
+  vv?.addEventListener("scroll", fit);
+
+  // Tapping send must not steal focus from the input, or the keyboard closes between messages.
+  $("chat-form").querySelector("button").addEventListener("pointerdown", (e) => e.preventDefault());
 }
 
 // Unread = messages from the other side newer than what was on screen last time.
