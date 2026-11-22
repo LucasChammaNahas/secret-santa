@@ -251,10 +251,7 @@ main {
 .banner-red p { color: #ffdcd7; }
 .banner-green { background: linear-gradient(135deg, var(--green-2), var(--green)); color: #fff; }
 .banner-green p { color: #d4f5e8; }
-.banner-soft { background: var(--surface-low); }
-.banner-soft p { color: var(--text-2); }
 .icon-circle { width: 44px; height: 44px; padding: 10px; border-radius: 50%; background: rgba(255, 255, 255, 0.2); }
-.banner-soft .icon-circle { background: var(--gold-2); color: #4a2e00; }
 .icon-badge { width: 32px; height: 32px; padding: 7px; border-radius: 50%; background: var(--gold-soft); }
 .icon-hero { width: 56px; height: 56px; color: var(--primary); margin: 8px auto 12px; display: block; }
 
@@ -404,16 +401,6 @@ input:focus { outline: none; border-color: var(--primary-2); background: #fff; }
 .wish.compact .wish-text { font-size: 0.95rem; }
 
 /* ============ Chats ============ */
-.chat-pickers { display: grid; gap: 10px; }
-.chat-picker {
-  position: relative;
-  display: flex; align-items: center; gap: 12px;
-  padding: 14px; border: 2px solid transparent; border-radius: var(--radius);
-  background: var(--surface-mid); color: var(--text);
-  font: inherit; text-align: left; cursor: pointer;
-  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
-}
-.chat-picker.active { background: var(--surface); border-color: var(--primary-soft); box-shadow: var(--shadow); }
 .picker-avatar {
   width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
   display: grid; place-items: center;
@@ -421,14 +408,8 @@ input:focus { outline: none; border-color: var(--primary-2); background: #fff; }
 }
 .picker-avatar.red { background: var(--primary); color: #fff; }
 .picker-avatar.gold { background: var(--gold-2); color: #4a2e00; }
-.picker-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.picker-text strong { font-family: var(--display); font-size: 1.05rem; }
-.picker-text small { color: var(--text-2); font-size: 0.8rem; }
-.preview { color: var(--muted); font-size: 0.85rem; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.preview:empty { display: none; }
 .badge {
-  position: absolute; top: 12px; right: 12px;
-  min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
+  flex-shrink: 0; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
   display: grid; place-items: center;
   background: var(--primary-2); color: #fff;
   font-style: normal; font-size: 0.75rem; font-weight: 800;
@@ -436,10 +417,11 @@ input:focus { outline: none; border-color: var(--primary-2); background: #fff; }
 }
 
 .chat { padding: 0; overflow: hidden; }
-.chat-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--surface-low); }
-.chat-head div { display: flex; flex-direction: column; min-width: 0; }
-.chat-head strong { font-family: var(--display); font-size: 1.05rem; }
-.chat-head small { color: var(--text-2); font-size: 0.8rem; }
+/* Who you're talking to: plain text on the page, no card. */
+.chat-who { display: flex; align-items: center; gap: 12px; padding: 4px 4px 0; }
+.chat-who div { display: flex; flex-direction: column; min-width: 0; }
+.chat-who strong { font-family: var(--display); font-size: 1.15rem; }
+.chat-who small { color: var(--text-2); font-size: 0.85rem; }
 .messages {
   list-style: none; margin: 0; padding: 16px;
   height: min(52vh, 440px); overflow-y: auto;

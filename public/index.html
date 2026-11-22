@@ -182,43 +182,20 @@
         </div>
 
         <div id="chats" hidden>
-          <div class="card banner banner-soft">
-            <svg class="icon icon-circle gold-bg"><use href="#i-mask"/></svg>
-            <div>
-              <h2>Correio secreto <span class="pill pill-green">100% anônimo</span></h2>
-              <p>Pergunte tamanhos, cores e gostos sem estragar a surpresa.</p>
-            </div>
+          <div class="segmented" id="chat-sides">
+            <button type="button" data-side="giving" class="active"><svg class="icon"><use href="#i-gift"/></svg> <span class="giving-title"></span><i class="badge" hidden></i></button>
+            <button type="button" data-side="receiving"><svg class="icon"><use href="#i-mask"/></svg> <span>Quem me tirou</span><i class="badge" hidden></i></button>
           </div>
 
-          <div class="chat-pickers">
-            <button type="button" class="chat-picker active" data-side="giving">
-              <span class="picker-avatar red" id="giving-avatar"></span>
-              <span class="picker-text">
-                <strong class="giving-title"></strong>
-                <small class="giving-sub"></small>
-                <span class="preview" data-preview="giving"></span>
-              </span>
-              <i class="badge" hidden></i>
-            </button>
-            <button type="button" class="chat-picker" data-side="receiving">
-              <span class="picker-avatar gold"><svg class="icon"><use href="#i-mask"/></svg></span>
-              <span class="picker-text">
-                <strong>Meu amigo secreto</strong>
-                <small>Quem tirou você. Identidade oculta.</small>
-                <span class="preview" data-preview="receiving"></span>
-              </span>
-              <i class="badge" hidden></i>
-            </button>
+          <div class="chat-who">
+            <span class="picker-avatar" id="chat-head-avatar"></span>
+            <div>
+              <strong id="chat-head-title"></strong>
+              <small id="chat-head-sub"></small>
+            </div>
           </div>
 
           <div class="card chat">
-            <div class="chat-head">
-              <span class="picker-avatar" id="chat-head-avatar"></span>
-              <div>
-                <strong id="chat-head-title"></strong>
-                <small id="chat-head-sub"></small>
-              </div>
-            </div>
             <ul id="messages" class="messages" aria-live="polite"></ul>
             <form id="chat-form" class="chat-form">
               <input id="chat-input" maxlength="1000" placeholder="Escreva uma mensagem secreta…" autocomplete="off" enterkeyhint="send">

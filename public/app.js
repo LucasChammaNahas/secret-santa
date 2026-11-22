@@ -351,10 +351,23 @@ function wishCard(item, { deletable = false, compact = false } = {}) {
 }
 
 // ---------- Conversas ----------
-// Polls every 5 s while the page is visible. Dots show unread messages.
+// Polls every 5 s while the page is visible and someone touched it in the last 10 min.
+// A forgotten open tab stops polling, so it can't burn the free plan's daily request limit.
+// Dots show unread messages.
 
 const POLL_MS = 5000;
+const IDLE_MS = 10 * 60 * 1000;
 let polling = false;
+let lastActivity = Date.now();
+
+const isActive = () => document.visibilityState === "visible" && Date.now() - lastActivity < IDLE_MS;
+
+// Any interaction restarts the 10 min window. Coming back from idle polls right away.
+function noteActivity() {
+  const wasIdle = Date.now() - lastActivity >= IDLE_MS;
+  lastActivity = Date.now();
+  if (wasIdle) poll();
+}
 
 function setupChats() {
   if (!state.me.drawn) {
@@ -363,24 +376,25 @@ function setupChats() {
   }
   $("chats").hidden = false;
 
-  $$(".chat-picker").forEach((b) => b.addEventListener("click", () => selectSide(b.dataset.side)));
+  $$("#chat-sides button").forEach((b) => b.addEventListener("click", () => selectSide(b.dataset.side)));
   $("chat-form").addEventListener("submit", sendMessage);
   selectSide("giving");
 
   poll();
-  setInterval(() => document.visibilityState === "visible" && poll(), POLL_MS);
+  setInterval(() => isActive() && poll(), POLL_MS);
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") poll();
+    if (document.visibilityState !== "visible") return;
+    lastActivity = Date.now();
+    poll();
   });
+  // Capture phase so scrolls inside the message list count too.
+  for (const type of ["pointerdown", "pointermove", "keydown", "wheel", "touchstart", "scroll"])
+    document.addEventListener(type, noteActivity, { capture: true, passive: true });
 }
 
 function updateChatLabels() {
   if (!state.me.drawn) return;
-  const revealed = isRevealed();
-  const name = state.me.receiver;
-  document.querySelector(".giving-title").textContent = revealed ? name : "Quem eu tirei";
-  document.querySelector(".giving-sub").textContent = revealed ? "Não sabe que é você 🤫" : "Abra o presente para ver o nome";
-  $("giving-avatar").replaceChildren(revealed ? initials(name) : icon("gift"));
+  document.querySelector(".giving-title").textContent = isRevealed() ? state.me.receiver : "Quem eu tirei";
   updateChatHead();
 }
 
@@ -390,16 +404,17 @@ function updateChatHead() {
   const revealed = isRevealed();
   $("chat-head-avatar").className = `picker-avatar ${giving ? "red" : "gold"}`;
   $("chat-head-avatar").replaceChildren(giving ? (revealed ? initials(state.me.receiver) : icon("gift")) : icon("mask"));
-  $("chat-head-title").textContent = giving ? (revealed ? state.me.receiver : "Quem eu tirei") : "Seu amigo secreto";
+  const name = revealed ? state.me.receiver : "quem você tirou";
+  $("chat-head-title").textContent = giving ? `Conversando com ${name}` : "Conversando com quem tirou você";
   $("chat-head-sub").textContent = giving
-    ? "Vê você só como “Amigo secreto” 🎅"
+    ? `${revealed ? name : "A pessoa"} não sabe que é você. Você aparece como “Amigo secreto” 🎅`
     : "Você não sabe quem é. Ainda!";
-  $("chat-input").placeholder = giving ? "Mensagem anônima…" : "Responder ao seu amigo secreto…";
+  $("chat-input").placeholder = giving ? `Mensagem anônima para ${name}…` : "Responder a quem tirou você…";
 }
 
 function selectSide(side) {
   state.side = side;
-  $$(".chat-picker").forEach((b) => b.classList.toggle("active", b.dataset.side === side));
+  $$("#chat-sides button").forEach((b) => b.classList.toggle("active", b.dataset.side === side));
   updateChatHead();
   renderMessages();
   markSeen();
@@ -408,6 +423,7 @@ function selectSide(side) {
 async function poll() {
   if (polling) return;
   polling = true;
+  console.log(`[poll] ${new Date().toLocaleTimeString()}`);
   try {
     const data = await api(`/api/chats?giving=${state.lastId.giving}&receiving=${state.lastId.receiving}`);
     addMessages("giving", data.giving);
@@ -426,14 +442,7 @@ function addMessages(side, msgs) {
   if (!fresh.length) return;
   state.messages[side].push(...fresh);
   state.lastId[side] = fresh[fresh.length - 1].id;
-  updatePreview(side);
   if (side === state.side) appendMessages(fresh);
-}
-
-function updatePreview(side) {
-  const last = state.messages[side].at(-1);
-  const node = document.querySelector(`[data-preview="${side}"]`);
-  node.textContent = last ? `${last.mine ? "Você: " : ""}${last.body}` : "";
 }
 
 function renderMessages() {
@@ -509,7 +518,7 @@ function unreadCount(side) {
 
 function updateDots() {
   let total = 0;
-  $$(".chat-picker").forEach((b) => {
+  $$("#chat-sides button").forEach((b) => {
     const n = unreadCount(b.dataset.side);
     total += n;
     const badge = b.querySelector(".badge");
