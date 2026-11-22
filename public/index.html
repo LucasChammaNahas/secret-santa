@@ -1,18 +1,111 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Secret Santa</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#b3261e">
+  <title>Amigo Secreto</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎁</text></svg>">
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <h1>Secret Santa</h1>
-  <pre id="health">Checking backend…</pre>
-  <script>
-    fetch("/api/health")
-      .then((r) => r.json())
-      .then((data) => (document.getElementById("health").textContent = JSON.stringify(data, null, 2)))
-      .catch((err) => (document.getElementById("health").textContent = "Error: " + err));
-  </script>
+  <header class="top">
+    <h1>🎄 Amigo Secreto</h1>
+    <p id="hello" hidden>Olá, <strong id="my-name"></strong>!</p>
+  </header>
+
+  <main>
+    <p id="status" class="card status">Carregando…</p>
+
+    <section id="app" hidden>
+      <nav id="tabs" class="tabs">
+        <button type="button" data-tab="tab-friend" class="active">🎁<span>Amigo</span></button>
+        <button type="button" data-tab="tab-mylist">📝<span>Minha lista</span></button>
+        <button type="button" data-tab="tab-chats">💬<span>Chats</span><i id="chats-dot" class="dot" hidden></i></button>
+        <button type="button" data-tab="tab-admin" id="admin-tab-btn" hidden>⚙️<span>Admin</span></button>
+      </nav>
+
+      <!-- Amigo: reveal + their wishlist -->
+      <div id="tab-friend" class="tab">
+        <div id="not-drawn" class="card center" hidden>
+          <p class="big">⏳</p>
+          <p>O sorteio ainda não foi feito.</p>
+          <p class="muted">Enquanto isso, monte sua lista em <strong>Minha lista</strong>.</p>
+        </div>
+
+        <div id="drawn" class="card center" hidden>
+          <p>Seu amigo secreto é…</p>
+          <button id="reveal-btn" type="button" class="primary big-btn">Revelar</button>
+          <p id="receiver" class="receiver" hidden></p>
+        </div>
+
+        <div id="their-list-card" class="card" hidden>
+          <h2>Lista de <span class="receiver-name"></span></h2>
+          <ul id="their-list" class="wish-list"></ul>
+          <p id="their-list-empty" class="muted" hidden>Ainda não tem nada aqui. Que tal perguntar no chat?</p>
+        </div>
+      </div>
+
+      <!-- Minha lista -->
+      <div id="tab-mylist" class="tab" hidden>
+        <div class="card">
+          <h2>Minha lista de desejos</h2>
+          <p class="muted">Só quem tirou você vê esta lista.</p>
+
+          <form id="wish-form" class="wish-form">
+            <div class="segmented" role="radiogroup">
+              <label><input type="radio" name="kind" value="item" checked><span>Item específico</span></label>
+              <label><input type="radio" name="kind" value="idea"><span>Ideia de presente</span></label>
+            </div>
+            <input id="wish-text" maxlength="300" required autocomplete="off">
+            <input id="wish-url" type="text" inputmode="url" maxlength="1000" autocomplete="off" placeholder="Link (opcional)">
+            <button type="submit" class="primary">Adicionar</button>
+          </form>
+
+          <ul id="my-list" class="wish-list"></ul>
+          <p id="my-list-empty" class="muted center">Sua lista está vazia.</p>
+        </div>
+      </div>
+
+      <!-- Chats -->
+      <div id="tab-chats" class="tab" hidden>
+        <div id="chats-not-drawn" class="card center" hidden>
+          <p class="big">💬</p>
+          <p>Os chats abrem depois do sorteio.</p>
+        </div>
+
+        <div id="chats" hidden>
+          <div class="segmented" id="chat-sides">
+            <button type="button" data-side="giving" class="active">🎁 <span class="giving-label"></span><i class="dot" hidden></i></button>
+            <button type="button" data-side="receiving">🤫 Meu amigo secreto<i class="dot" hidden></i></button>
+          </div>
+          <p id="chat-hint" class="muted center"></p>
+
+          <div class="card chat">
+            <ul id="messages" class="messages"></ul>
+            <form id="chat-form" class="chat-form">
+              <input id="chat-input" maxlength="1000" placeholder="Escreva uma mensagem…" autocomplete="off" required>
+              <button type="submit" class="primary">Enviar</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin -->
+      <div id="tab-admin" class="tab" hidden>
+        <div class="card center">
+          <p id="draw-status"></p>
+          <button id="draw-btn" type="button" class="primary" hidden>Sortear</button>
+          <button id="reset-btn" type="button" class="danger" hidden>Reiniciar sorteio</button>
+        </div>
+
+        <ul id="member-list" class="member-list"></ul>
+        <p class="muted center">👀 abriu o link · 🎁 preencheu a lista</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
 </body>
 </html>
