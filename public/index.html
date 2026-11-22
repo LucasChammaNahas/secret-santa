@@ -24,7 +24,8 @@
       <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
       <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
       <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2"/></symbol>
-      <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M9.9 9.9a3 3 0 1 0 4.2 4.2"/><path d="M10.7 5.1A10.4 10.4 0 0 1 12 5c7 0 10 7 10 7a13 13 0 0 1-1.7 2.7"/><path d="M6.6 6.6A13.5 13.5 0 0 0 2 12s3 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="m2 2 20 20"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-eye-off"viewBox="0 0 24 24"><path d="M9.9 9.9a3 3 0 1 0 4.2 4.2"/><path d="M10.7 5.1A10.4 10.4 0 0 1 12 5c7 0 10 7 10 7a13 13 0 0 1-1.7 2.7"/><path d="M6.6 6.6A13.5 13.5 0 0 0 2 12s3 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="m2 2 20 20"/></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
       <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></symbol>
       <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></symbol>
@@ -71,7 +72,7 @@
         <div id="reveal-wrapped" class="card gift-card center" hidden>
           <div class="ribbon-strip"></div>
           <span class="pill pill-gold"><svg class="icon"><use href="#i-sparkles"/></svg> Momento mágico</span>
-          <button type="button" id="gift-btn" class="gift-box" aria-label="Abrir o presente e descobrir seu amigo secreto">
+          <button type="button" id="gift-btn" class="gift-box" aria-label="Abrir o presente e descobrir quem você tirou">
             <div class="gift-lid"></div><div class="gift-body"></div><div class="gift-bow"></div>
           </button>
           <h2>Quem será que você tirou?</h2>
@@ -79,24 +80,32 @@
           <button type="button" id="reveal-btn" class="btn btn-primary btn-block"><svg class="icon"><use href="#i-gift"/></svg> Abrir presente</button>
         </div>
 
-        <!-- Revealed -->
-        <div id="reveal-open" class="card gift-card center" hidden>
-          <div class="ribbon-strip"></div>
-          <div id="confetti" class="confetti" aria-hidden="true"></div>
-          <span class="pill pill-green"><svg class="icon"><use href="#i-sparkles"/></svg> Você tirou</span>
-          <div class="receiver-avatar"><span id="receiver-initial"></span></div>
-          <p class="receiver-name" id="receiver-name"></p>
-          <div class="note">
-            <svg class="icon"><use href="#i-lock"/></svg>
-            <div><strong>Shhh! É segredo de Natal.</strong><span>Não conte para ninguém até a troca de presentes.</span></div>
+        <!-- Opened: both cards sit in the same grid cell, so the box keeps one height when toggling -->
+        <div id="reveal-stack" class="reveal-stack" hidden>
+          <!-- Name showing -->
+          <div id="reveal-open" class="card gift-card center">
+            <div class="ribbon-strip"></div>
+            <div id="confetti" class="confetti" aria-hidden="true"></div>
+            <p class="reveal-label">Você tirou</p>
+            <p class="receiver-name" id="receiver-name"></p>
+            <button type="button" id="cover-btn" class="btn btn-ghost btn-block"><svg class="icon"><use href="#i-eye-off"/></svg> Esconder agora</button>
+            <p class="muted small">Esconde sozinho em 1 minuto ou quando você sair daqui.</p>
           </div>
-          <button type="button" id="cover-btn" class="btn btn-ghost btn-block"><svg class="icon"><use href="#i-eye-off"/></svg> Cobrir de novo para ninguém espiar</button>
+
+          <!-- Name covered -->
+          <div id="reveal-covered" class="card gift-card center">
+            <div class="ribbon-strip"></div>
+            <span class="lock-circle"><svg class="icon"><use href="#i-lock"/></svg></span>
+            <h2>Nome escondido</h2>
+            <p class="muted">Para ninguém espiar.</p>
+            <button type="button" id="show-btn" class="btn btn-primary btn-block"><svg class="icon"><use href="#i-eye"/></svg> Mostrar quem eu tirei</button>
+          </div>
         </div>
 
         <!-- Preview of their list -->
         <div id="their-preview" class="card" hidden>
           <div class="card-head">
-            <h3><svg class="icon icon-badge gold"><use href="#i-heart"/></svg><span>Desejos de <span class="receiver-first"></span></span></h3>
+            <h3><svg class="icon icon-badge gold"><use href="#i-heart"/></svg><span>Desejos de quem você tirou</span></h3>
             <span id="their-count" class="pill pill-muted"></span>
           </div>
           <ul id="their-preview-list" class="wish-list compact"></ul>
@@ -112,14 +121,14 @@
       <section id="tab-wishes" class="tab" hidden>
         <div class="segmented" id="wish-views">
           <button type="button" data-view="mine" class="active"><svg class="icon"><use href="#i-heart"/></svg> Minha lista</button>
-          <button type="button" data-view="theirs" id="theirs-view-btn" hidden><svg class="icon"><use href="#i-gift"/></svg> <span>Lista de <span class="receiver-first"></span></span></button>
+          <button type="button" data-view="theirs" id="theirs-view-btn" hidden><svg class="icon"><use href="#i-gift"/></svg> <span>Quem eu tirei</span></button>
         </div>
 
         <div id="wishes-mine">
           <div class="card banner banner-red">
             <svg class="icon icon-circle"><use href="#i-gift"/></svg>
             <div>
-              <h2>Dicas para seu amigo secreto</h2>
+              <h2>Dicas para quem tirou você</h2>
               <p>Conte o que você adoraria ganhar. Só quem tirou você vê esta lista.</p>
             </div>
           </div>
@@ -146,7 +155,7 @@
 
           <div class="list-head">
             <span>Seus desejos (<span id="my-count">0</span>)</span>
-            <span class="private"><svg class="icon"><use href="#i-lock"/></svg> Só seu amigo secreto vê</span>
+            <span class="private"><svg class="icon"><use href="#i-lock"/></svg> Só quem tirou você vê</span>
           </div>
           <ul id="my-list" class="wish-list"></ul>
           <div id="my-list-empty" class="empty-state">
@@ -159,7 +168,7 @@
           <div class="card banner banner-green">
             <svg class="icon icon-circle"><use href="#i-heart"/></svg>
             <div>
-              <h2>Desejos de <span class="receiver-first"></span></h2>
+              <h2>Desejos de quem você tirou</h2>
               <p>Dúvida de tamanho ou cor? Pergunte no chat sem revelar quem você é.</p>
               <button type="button" class="btn btn-light btn-sm" data-goto="tab-chats" data-chat-side="giving"><svg class="icon"><use href="#i-chat"/></svg> Perguntar no chat</button>
             </div>
@@ -183,7 +192,7 @@
 
         <div id="chats" hidden>
           <div class="segmented" id="chat-sides">
-            <button type="button" data-side="giving" class="active"><svg class="icon"><use href="#i-gift"/></svg> <span class="giving-title"></span><i class="badge" hidden></i></button>
+            <button type="button" data-side="giving" class="active"><svg class="icon"><use href="#i-gift"/></svg> <span>Quem eu tirei</span><i class="badge" hidden></i></button>
             <button type="button" data-side="receiving"><svg class="icon"><use href="#i-mask"/></svg> <span>Quem me tirou</span><i class="badge" hidden></i></button>
           </div>
 
@@ -245,7 +254,7 @@
   </main>
 
   <nav id="bottom-nav" class="bottom-nav" hidden>
-    <button type="button" data-tab="tab-reveal" class="active"><svg class="icon"><use href="#i-gift"/></svg><span>Revelação</span></button>
+    <button type="button" data-tab="tab-reveal" class="active"><svg class="icon"><use href="#i-gift"/></svg><span>Seu Amigo</span></button>
     <button type="button" data-tab="tab-wishes"><svg class="icon"><use href="#i-heart"/></svg><span>Desejos</span></button>
     <button type="button" data-tab="tab-chats"><svg class="icon"><use href="#i-chat"/></svg><span>Conversas</span><i id="chats-dot" class="dot" hidden></i></button>
     <button type="button" data-tab="tab-admin" id="admin-tab-btn" hidden><svg class="icon"><use href="#i-users"/></svg><span>Família</span></button>

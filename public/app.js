@@ -10,6 +10,7 @@ const $$ = (sel) => document.querySelectorAll(sel);
 const state = {
   me: null,
   side: "giving", // selected chat
+  showing: false, // receiver's name on screen right now
   messages: { giving: [], receiving: [] },
   lastId: { giving: 0, receiving: 0 },
   theirItems: [],
@@ -101,12 +102,8 @@ async function init() {
   $("draw-chip").classList.toggle("done", me.drawn);
   $("draw-chip").querySelector("span").textContent = me.drawn ? "Sorteio realizado" : "Aguardando sorteio";
   $("greeting-text").textContent = me.drawn
-    ? "O sorteio já aconteceu e o seu amigo secreto está guardado aqui dentro."
+    ? "O sorteio já aconteceu e quem você tirou está guardado aqui dentro."
     : "Ainda falta o sorteio. Assim que acontecer, você descobre aqui quem tirou.";
-
-  if (me.drawn) {
-    $$(".receiver-first").forEach((n) => (n.textContent = me.receiver));
-  }
 
   setupNav();
   setupReveal();
@@ -136,6 +133,7 @@ function setupNav() {
 }
 
 function showTab(id, { replace = false } = {}) {
+  if (id !== "tab-reveal") hideName();
   $$("#bottom-nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === id));
   $$(".tab").forEach((t) => (t.hidden = t.id !== id));
   window.scrollTo({ top: 0 });
@@ -144,8 +142,7 @@ function showTab(id, { replace = false } = {}) {
   const url = `${location.pathname}?tab=${id.replace("tab-", "")}${location.hash}`;
   history[replace ? "replaceState" : "pushState"]({ tab: id }, "", url);
 
-  if (id === "tab-reveal" && isRevealed()) loadTheirList();
-  if (id === "tab-wishes" && isRevealed()) loadTheirList();
+  if ((id === "tab-reveal" || id === "tab-wishes") && isOpened()) loadTheirList();
   if (id === "tab-chats") {
     scrollChatToBottom();
     markSeen();
@@ -159,9 +156,29 @@ window.addEventListener("popstate", (e) => {
 
 // ---------- Revelação ----------
 
-// Remember the reveal per receiver, so a redraw asks to reveal again.
-function isRevealed() {
+// Two states:
+// - opened: the gift was opened once (saved per receiver, so a redraw asks to open again).
+// - showing: the name is on screen right now. Phones are shared, so it covers itself
+//   after 1 min, when leaving this tab, or when the page is hidden. The name appears nowhere else.
+const SHOW_MS = 60 * 1000;
+let hideTimer;
+
+function isOpened() {
   return state.me.drawn && localStorage.getItem(storeKey("revealed")) === state.me.receiver;
+}
+
+function showName({ celebrate = false } = {}) {
+  state.showing = true;
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(hideName, SHOW_MS);
+  applyReveal({ celebrate });
+}
+
+function hideName() {
+  if (!state.showing) return;
+  state.showing = false;
+  clearTimeout(hideTimer);
+  applyReveal();
 }
 
 function setupReveal() {
@@ -171,37 +188,41 @@ function setupReveal() {
     return;
   }
   $("receiver-name").textContent = me.receiver;
-  $("receiver-initial").textContent = initials(me.receiver);
 
   const open = () => {
     if ($("gift-btn").classList.contains("opening")) return;
     $("gift-btn").classList.add("opening");
     setTimeout(() => {
       localStorage.setItem(storeKey("revealed"), me.receiver);
-      applyReveal({ celebrate: true });
+      showName({ celebrate: true });
       $("gift-btn").classList.remove("opening");
     }, 650);
   };
   $("gift-btn").addEventListener("click", open);
   $("reveal-btn").addEventListener("click", open);
-  $("cover-btn").addEventListener("click", () => {
-    localStorage.removeItem(storeKey("revealed"));
-    applyReveal();
+  $("show-btn").addEventListener("click", () => showName());
+  $("cover-btn").addEventListener("click", hideName);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") hideName();
   });
 
   applyReveal();
 }
 
 function applyReveal({ celebrate = false } = {}) {
-  const revealed = isRevealed();
-  $("reveal-wrapped").hidden = revealed;
-  $("reveal-open").hidden = !revealed;
-  $("their-preview").hidden = !revealed;
-  $("theirs-view-btn").hidden = !revealed;
-  if (!revealed) showWishView("mine");
-  updateChatLabels();
-  if (revealed) loadTheirList();
-  if (celebrate) confetti();
+  const opened = isOpened();
+  $("reveal-wrapped").hidden = opened;
+  $("reveal-stack").hidden = !opened;
+  $("reveal-open").classList.toggle("off", !state.showing);
+  $("reveal-covered").classList.toggle("off", state.showing);
+  $("their-preview").hidden = !opened;
+  $("theirs-view-btn").hidden = !opened;
+  if (!opened) showWishView("mine");
+  // showTab loads the list on later visits; only the first opening needs it here.
+  if (celebrate) {
+    loadTheirList();
+    confetti();
+  }
 }
 
 function confetti() {
@@ -263,7 +284,7 @@ function setupWishes() {
 }
 
 function showWishView(view) {
-  if (view === "theirs" && !isRevealed()) view = "mine";
+  if (view === "theirs" && !isOpened()) view = "mine";
   $$("#wish-views button").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
   $("wishes-mine").hidden = view !== "mine";
   $("wishes-theirs").hidden = view !== "theirs";
@@ -392,24 +413,16 @@ function setupChats() {
     document.addEventListener(type, noteActivity, { capture: true, passive: true });
 }
 
-function updateChatLabels() {
-  if (!state.me.drawn) return;
-  document.querySelector(".giving-title").textContent = isRevealed() ? state.me.receiver : "Quem eu tirei";
-  updateChatHead();
-}
-
+// The receiver's name never appears here; only the Seu Amigo tab shows it.
 function updateChatHead() {
-  if (!state.me.drawn) return;
   const giving = state.side === "giving";
-  const revealed = isRevealed();
   $("chat-head-avatar").className = `picker-avatar ${giving ? "red" : "gold"}`;
-  $("chat-head-avatar").replaceChildren(giving ? (revealed ? initials(state.me.receiver) : icon("gift")) : icon("mask"));
-  const name = revealed ? state.me.receiver : "quem você tirou";
-  $("chat-head-title").textContent = giving ? `Conversando com ${name}` : "Conversando com quem tirou você";
+  $("chat-head-avatar").replaceChildren(icon(giving ? "gift" : "mask"));
+  $("chat-head-title").textContent = giving ? "Conversando com quem você tirou" : "Conversando com quem tirou você";
   $("chat-head-sub").textContent = giving
-    ? `${revealed ? name : "A pessoa"} não sabe que é você. Você aparece como “Amigo secreto” 🎅`
+    ? "Essa pessoa não sabe que é você. Para ela, você aparece como “Quem me tirou” 🎅"
     : "Você não sabe quem é. Ainda!";
-  $("chat-input").placeholder = giving ? `Mensagem anônima para ${name}…` : "Responder a quem tirou você…";
+  $("chat-input").placeholder = giving ? "Mensagem anônima para quem você tirou…" : "Responder a quem tirou você…";
 }
 
 function selectSide(side) {
@@ -454,7 +467,7 @@ function renderMessages() {
       el("li", { className: "empty" }, icon("sparkles"), el("span", {
         textContent: state.side === "giving"
           ? "Puxe assunto! Pergunte tamanho, cor preferida…"
-          : "Quando seu amigo secreto escrever, aparece aqui.",
+          : "Quando quem tirou você escrever, aparece aqui.",
       }))
     );
   scrollChatToBottom();
