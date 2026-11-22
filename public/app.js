@@ -132,11 +132,15 @@ function setupNav() {
   });
 }
 
-// Presentes and Conversas unlock only after the draw AND after the person saw who they drew.
+// Conversas unlocks only after the draw AND after the person saw who they drew.
 // isOpened() is false before the draw, and a reset + new draw makes it false again (new drawId).
-const isLocked = (id) => !isOpened() && (id === "tab-wishes" || id === "tab-chats");
+// Presentes is always open (people can build their own list early); inside it, the
+// "Quem eu tirei" list only appears once opened (see applyReveal).
+const isLocked = (id) => !isOpened() && id === "tab-chats";
 
 function updateLocks() {
+  // Red dot on Seu Amigo: drawn but not seen yet. Goes away for good once opened (per draw).
+  $("reveal-dot").hidden = !(state.me.drawn && !isOpened());
   $$("#bottom-nav button").forEach((b) => {
     const locked = isLocked(b.dataset.tab);
     b.classList.toggle("locked", locked);
@@ -146,7 +150,8 @@ function updateLocks() {
 
 function showTab(id, { replace = false } = {}) {
   if (isLocked(id)) {
-    if (!replace) toast(state.me.drawn ? "Primeiro veja quem você tirou 🎁" : "Abre depois do sorteio 🎁");
+    // Tapped: explain and stay where you are. Restored from the URL/history: fall back to the first tab.
+    if (!replace) return toast(state.me.drawn ? "Primeiro veja quem você tirou 🎁" : "Abre depois do sorteio 🎁");
     id = "tab-reveal";
   }
   if (id !== "tab-reveal") hideName();
