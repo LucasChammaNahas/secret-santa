@@ -151,8 +151,8 @@ function updateLocks() {
 
 function showTab(id, { replace = false } = {}) {
   if (isLocked(id)) {
-    // Tapped: explain and stay where you are. Restored from the URL/history: fall back to the first tab.
-    if (!replace) return toast(state.me.drawn ? "Primeiro veja quem você tirou 🎁" : "Abre depois do sorteio 🎁");
+    // Tapped: do nothing, the lock icon says it all. Restored from the URL/history: fall back to the first tab.
+    if (!replace) return;
     id = "tab-reveal";
   }
   if (id !== "tab-reveal") hideName();
@@ -597,7 +597,7 @@ function updateDots() {
     badge.hidden = n === 0;
     badge.textContent = n > 9 ? "9+" : n;
   });
-  // A locked tab gets no dot: tapping it would only say "see who you drew first".
+  // A locked tab gets no dot: tapping it does nothing, so the dot would only tease.
   $("chats-dot").hidden = total === 0 || isLocked("tab-chats");
 }
 
