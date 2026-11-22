@@ -146,6 +146,7 @@ function updateLocks() {
     b.classList.toggle("locked", locked);
     b.setAttribute("aria-disabled", locked);
   });
+  updateDots(); // unlocking Conversas may reveal waiting unread messages
 }
 
 function showTab(id, { replace = false } = {}) {
@@ -414,20 +415,19 @@ function noteActivity() {
   if (wasIdle) poll();
 }
 
+// Before the draw there's no timer: the page only checks when it becomes visible again
+// (e.g. reopened from WhatsApp). That's how an open page finds out the draw happened (see poll).
 function setupChats() {
-  if (!state.me.drawn) {
-    $("chats-waiting").hidden = false;
-    return;
+  if (state.me.drawn) {
+    $("chats").hidden = false;
+    $$("#chat-sides button").forEach((b) => b.addEventListener("click", () => selectSide(b.dataset.side)));
+    $("chat-form").addEventListener("submit", sendMessage);
+    setupKeyboard();
+    selectSide("giving");
+    poll();
+    setInterval(() => isActive() && poll(), POLL_MS);
   }
-  $("chats").hidden = false;
 
-  $$("#chat-sides button").forEach((b) => b.addEventListener("click", () => selectSide(b.dataset.side)));
-  $("chat-form").addEventListener("submit", sendMessage);
-  setupKeyboard();
-  selectSide("giving");
-
-  poll();
-  setInterval(() => isActive() && poll(), POLL_MS);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
     lastActivity = Date.now();
@@ -453,6 +453,8 @@ async function poll() {
   console.log(`[poll] ${new Date().toLocaleTimeString()}`);
   try {
     const data = await api(`/api/chats?giving=${state.lastId.giving}&receiving=${state.lastId.receiving}`);
+    // The draw happened, or was reset/redone, since this page loaded: everything on screen is stale.
+    if (data.drawn !== state.me.drawn || data.drawId !== state.me.drawId) return reloadWhenSafe();
     addMessages("giving", data.giving);
     addMessages("receiving", data.receiving);
     markSeen();
@@ -461,6 +463,13 @@ async function poll() {
   } finally {
     polling = false;
   }
+}
+
+// Don't wipe half-typed text or an open dialog; the next poll tries again.
+function reloadWhenSafe() {
+  const typing = ["wish-text", "wish-url", "chat-input"].some((id) => $(id).value.trim());
+  if (typing || document.querySelector("dialog[open]")) return;
+  location.reload();
 }
 
 // Dedupe by id: a poll in flight can return a message we already added after sending.
@@ -588,7 +597,8 @@ function updateDots() {
     badge.hidden = n === 0;
     badge.textContent = n > 9 ? "9+" : n;
   });
-  $("chats-dot").hidden = total === 0;
+  // A locked tab gets no dot: tapping it would only say "see who you drew first".
+  $("chats-dot").hidden = total === 0 || isLocked("tab-chats");
 }
 
 function formatTime(sqliteUtc) {
@@ -653,6 +663,7 @@ async function loadAdmin() {
   $("admin-state").className = `pill ${data.drawn ? "pill-green" : "pill-gold"}`;
   $("admin-state").replaceChildren(icon(data.drawn ? "check" : "clock"), data.drawn ? "Sorteio realizado" : "Aguardando sorteio");
   $("stat-total").textContent = total;
+  $("draw-count").textContent = `Sorteia todos os ${total} de uma vez`;
   $("stat-opened").textContent = opened;
   $("stat-filled").textContent = filled;
   $("progress-label").textContent = `${filled} de ${total}`;

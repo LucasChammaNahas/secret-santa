@@ -177,7 +177,11 @@ async function getPairs(env, me) {
 
 async function getChats(env, me, url) {
   const pairs = await getPairs(env, me);
-  const out = { drawn: Boolean(pairs.giving) };
+  // drawn + drawId let open pages notice a draw or reset+redraw and reload (same values as /api/me).
+  const drawId = pairs.giving
+    ? await env.DB.prepare("SELECT MAX(id) AS id FROM draws").first("id")
+    : null;
+  const out = { drawn: Boolean(pairs.giving), drawId };
 
   for (const side of ["giving", "receiving"]) {
     const pair = pairs[side];
